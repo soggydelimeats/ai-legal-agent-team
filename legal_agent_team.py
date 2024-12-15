@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 import tempfile
 import os
 import openai
+import anthropic
 from markitdown import MarkItDown
 
 def init_qdrant():
@@ -217,10 +218,9 @@ def main():
                             if not st.session_state.anthropic_api_key:
                                 st.error("Anthropic API key is required to use Claude models")
                                 return
-                            model = Claude(
-                                id=st.session_state.selected_model,
-                                api_key=st.session_state.anthropic_api_key
-                            )
+                            # Set environment variable for Anthropic
+                            os.environ['ANTHROPIC_API_KEY'] = st.session_state.anthropic_api_key
+                            model = Claude(id=st.session_state.selected_model)
                         else:
                             if not st.session_state.openai_api_key:
                                 st.error("OpenAI API key is required to use OpenAI models")
