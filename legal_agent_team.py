@@ -56,7 +56,7 @@ class TextKnowledgeBase:
             
             # Create embeddings and store in vector database
             for i, chunk in enumerate(chunks):
-                embedding = self.embedder.embed_query(chunk)
+                embedding = self.embedder.embed_text(chunk)
                 self.vector_db.add_points(
                     vectors=[embedding],
                     documents=[chunk],
@@ -72,7 +72,7 @@ class TextKnowledgeBase:
         """Get relevant knowledge as a string, matching the interface expected by phi"""
         try:
             # Get query embedding
-            query_embedding = self.embedder.embed_query(query)
+            query_embedding = self.embedder.embed_text(query)
             
             # Search vector database
             results = self.vector_db.search(
