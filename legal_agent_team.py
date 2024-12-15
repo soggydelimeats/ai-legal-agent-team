@@ -121,6 +121,14 @@ def init_session_state():
         st.session_state.knowledge_base = None
     if 'selected_model' not in st.session_state:
         st.session_state.selected_model = "o1-mini"
+    if 'messages' not in st.session_state:
+        st.session_state.messages = []
+    if 'analysis_response' not in st.session_state:
+        st.session_state.analysis_response = None
+    if 'key_points_response' not in st.session_state:
+        st.session_state.key_points_response = None
+    if 'recommendations_response' not in st.session_state:
+        st.session_state.recommendations_response = None
 
 def main():
     st.set_page_config(page_title="Legal Document Analyzer", layout="wide")
@@ -430,6 +438,7 @@ def main():
                             """
 
                         response = st.session_state.legal_team.run(combined_query)
+                        st.session_state.analysis_response = response
                         
                         # Display results in tabs
                         tabs = st.tabs(["Analysis", "Key Points", "Recommendations"])
@@ -444,7 +453,6 @@ def main():
                                         st.markdown(message.content)
                         
                         with tabs[1]:
-                            st.markdown("### Key Points")
                             key_points_response = st.session_state.legal_team.run(
                                 f"""Based on this previous analysis:    
                                 {response.content}
@@ -452,6 +460,7 @@ def main():
                                 Please summarize the key points in bullet points.
                                 Focus on insights from: {', '.join(analysis_configs[analysis_type]['agents'])}"""
                             )
+                            st.session_state.key_points_response = key_points_response
                             if key_points_response.content:
                                 st.markdown(key_points_response.content)
                             else:
@@ -460,7 +469,6 @@ def main():
                                         st.markdown(message.content)
                         
                         with tabs[2]:
-                            st.markdown("### Recommendations")
                             recommendations_response = st.session_state.legal_team.run(
                                 f"""Based on this previous analysis:
                                 {response.content}
@@ -468,6 +476,7 @@ def main():
                                 What are your key recommendations based on the analysis, the best course of action?
                                 Provide specific recommendations from: {', '.join(analysis_configs[analysis_type]['agents'])}"""
                             )
+                            st.session_state.recommendations_response = recommendations_response
                             if recommendations_response.content:
                                 st.markdown(recommendations_response.content)
                             else:
@@ -478,63 +487,60 @@ def main():
                     except Exception as e:
                         st.error(f"Error during analysis: {str(e)}")
 
-        # Add chat interface after analysis is complete
-        if 'messages' not in st.session_state:
-            st.session_state.messages = []
+        # Update the chat interface section to use session state variables
+        if st.session_state.legal_team and st.session_state.analysis_response:
+            # Chat interface
+            st.divider()
+            st.header("💬 Legal Chat Assistant")
+            st.info("Ask questions about the document and analysis. The Legal Chat Assistant has access to the document, previous analysis, and can search for additional information.")
 
-        st.divider()
-        st.header("💬 Legal Chat Assistant")
-        st.info("Ask questions about the document and analysis. The Legal Chat Assistant has access to the document, previous analysis, and can search for additional information.")
+            # Display chat messages
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
 
-        # Display chat messages
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+            # Chat input
+            if prompt := st.chat_input("Ask a question about the document or analysis..."):
+                # Add user message to chat history
+                st.session_state.messages.append({"role": "user", "content": prompt})
+                
+                # Display user message
+                with st.chat_message("user"):
+                    st.markdown(prompt)
 
-        # Chat input
-        if prompt := st.chat_input("Ask a question about the document or analysis..."):
-            # Add user message to chat history
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            
-            # Display user message
-            with st.chat_message("user"):
-                st.markdown(prompt)
+                # Get AI response
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        # Create context from previous analysis using session state
+                        context = f"""
+                        Previous document analysis and findings:
+                        {st.session_state.analysis_response.content if hasattr(st.session_state.analysis_response, 'content') else ''}
+                        
+                        Key Points:
+                        {st.session_state.key_points_response.content if hasattr(st.session_state.key_points_response, 'content') else ''}
+                        
+                        Recommendations:
+                        {st.session_state.recommendations_response.content if hasattr(st.session_state.recommendations_response, 'content') else ''}
+                        
+                        User Question: {prompt}
+                        """
+                        
+                        chat_response = legal_chat_agent.run(context)
+                        
+                        if chat_response.content:
+                            st.markdown(chat_response.content)
+                            st.session_state.messages.append({"role": "assistant", "content": chat_response.content})
+                        else:
+                            for message in chat_response.messages:
+                                if message.role == 'assistant' and message.content:
+                                    st.markdown(message.content)
+                                    st.session_state.messages.append({"role": "assistant", "content": message.content})
 
-            # Get AI response
-            with st.chat_message("assistant"):
-                with st.spinner("Thinking..."):
-                    # Create context from previous analysis
-                    context = f"""
-                    Previous document analysis and findings:
-                    {response.content if hasattr(response, 'content') else ''}
-                    
-                    Key Points:
-                    {key_points_response.content if hasattr(key_points_response, 'content') else ''}
-                    
-                    Recommendations:
-                    {recommendations_response.content if hasattr(recommendations_response, 'content') else ''}
-                    
-                    User Question: {prompt}
-                    """
-                    
-                    chat_response = legal_chat_agent.run(context)
-                    
-                    if chat_response.content:
-                        st.markdown(chat_response.content)
-                        # Add assistant response to chat history
-                        st.session_state.messages.append({"role": "assistant", "content": chat_response.content})
-                    else:
-                        for message in chat_response.messages:
-                            if message.role == 'assistant' and message.content:
-                                st.markdown(message.content)
-                                # Add assistant response to chat history
-                                st.session_state.messages.append({"role": "assistant", "content": message.content})
-
-        # Add clear chat button
-        if st.session_state.messages:
-            if st.button("Clear Chat History"):
-                st.session_state.messages = []
-                st.rerun()
+            # Add clear chat button
+            if st.session_state.messages:
+                if st.button("Clear Chat History"):
+                    st.session_state.messages = []
+                    st.rerun()
     else:
         st.info("Please upload a legal document to begin analysis")
 
