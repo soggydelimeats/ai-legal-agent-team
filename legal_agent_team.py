@@ -183,10 +183,11 @@ def main():
                             knowledge=st.session_state.knowledge_base,
                             search_knowledge=True,
                             instructions=[
-                                "Search relevant legal databases and external sources for applicable cases and precedents.",
+                                "Use DuckDuckGo to search relevant legal databases and external sources for applicable cases and precedents.",
                                 "Accurately cite all sources used.",
                                 "Provide concise summaries of findings.",
-                                "Reference specific sections of the uploaded document when relevant."
+                                "Reference specific sections of the uploaded document when relevant.",
+                                "Do not create your own sources, use only those provided by DuckDuckGo or the knowledge base."
                             ],
                             show_tool_calls=True,
                             markdown=True
