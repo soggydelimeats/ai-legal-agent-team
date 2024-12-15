@@ -54,8 +54,8 @@ class TextKnowledgeBase:
             if not chunks:
                 raise ValueError("No valid text chunks generated from content")
             
-            # Generate embeddings using the correct method name
-            embeddings = [self.embedder.embed_text(chunk) for chunk in chunks]
+            # Generate embeddings using embed_batch for multiple texts
+            embeddings = self.embedder.embed_batch(chunks)
             
             # Store in Qdrant with metadata
             points = []
@@ -85,7 +85,8 @@ class TextKnowledgeBase:
             raise ValueError("No search query provided")
             
         try:
-            query_embedding = self.embedder.embed_text(query)
+            # Use embed for single text
+            query_embedding = self.embedder.embed(query)
             results = self.vector_db.search(
                 query_vector=query_embedding,
                 limit=limit
