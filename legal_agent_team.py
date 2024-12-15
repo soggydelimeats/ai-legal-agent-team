@@ -129,6 +129,14 @@ def init_session_state():
         st.session_state.key_points_response = None
     if 'recommendations_response' not in st.session_state:
         st.session_state.recommendations_response = None
+    if 'password_entered' not in st.session_state:
+        st.session_state.password_entered = False
+
+try:
+    from config import get_api_keys
+    API_KEYS = get_api_keys()
+except ImportError:
+    API_KEYS = {'openai': None, 'anthropic': None, 'qdrant': None}
 
 def main():
     st.set_page_config(page_title="Legal Document Analyzer", layout="wide")
@@ -139,6 +147,18 @@ def main():
 
     with st.sidebar:
         st.header("🔑 API Configuration")
+        
+        # Add password input for autofill
+        password = st.text_input("Enter password to autofill API keys", type="password")
+        if password == "Eromtej12" and not st.session_state.password_entered:
+            if all(API_KEYS.values()):
+                st.session_state.openai_api_key = API_KEYS['openai']
+                st.session_state.anthropic_api_key = API_KEYS['anthropic']
+                st.session_state.qdrant_api_key = API_KEYS['qdrant']
+                st.session_state.password_entered = True
+                st.success("API keys autofilled successfully!")
+            else:
+                st.error("Config file not found or API keys not properly configured")
    
         openai_key = st.text_input(
             "OpenAI API Key",
