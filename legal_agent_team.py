@@ -30,6 +30,9 @@ class TextKnowledgeBase:
 
     def _chunk_text(self, text: str) -> List[str]:
         """Split text into chunks with overlap"""
+        if not text:
+            raise ValueError("No text content provided for chunking")
+            
         chunks = []
         start = 0
         while start < len(text):
@@ -38,42 +41,58 @@ class TextKnowledgeBase:
             if start > 0:
                 start = start - self.chunk_overlap
             chunk = text[start:end]
-            chunks.append(chunk)
+            if chunk.strip():  # Only add non-empty chunks
+                chunks.append(chunk)
             start = end
         return chunks
 
     def load(self):
         """Process and load the content into the vector database"""
-        # Split content into chunks
-        chunks = self._chunk_text(self.content)
-        
-        # Generate embeddings and store in vector database
-        embeddings = self.embedder.embed_documents(chunks)
-        
-        # Store in Qdrant with metadata
-        points = []
-        for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-            points.append({
-                "id": i,
-                "vector": embedding,
-                "payload": {
-                    "text": chunk,
-                    "chunk_index": i
-                }
-            })
-        
-        # Upload to Qdrant
-        self.vector_db.upsert(points=points)
-        return self
+        try:
+            # Split content into chunks
+            chunks = self._chunk_text(self.content)
+            if not chunks:
+                raise ValueError("No valid text chunks generated from content")
+            
+            # Generate embeddings using the correct method name
+            embeddings = [self.embedder.embed(chunk) for chunk in chunks]
+            
+            # Store in Qdrant with metadata
+            points = []
+            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+                points.append({
+                    "id": i,
+                    "vector": embedding,
+                    "payload": {
+                        "text": chunk,
+                        "chunk_index": i
+                    }
+                })
+            
+            if not points:
+                raise ValueError("No valid embeddings generated")
+                
+            # Upload to Qdrant
+            self.vector_db.upsert(points=points)
+            return self
+            
+        except Exception as e:
+            raise Exception(f"Error in TextKnowledgeBase.load(): {str(e)}")
 
     def search(self, query: str, limit: int = 5) -> List[dict]:
         """Search the knowledge base for relevant content"""
-        query_embedding = self.embedder.embed_query(query)
-        results = self.vector_db.search(
-            query_vector=query_embedding,
-            limit=limit
-        )
-        return [result.payload for result in results]
+        if not query:
+            raise ValueError("No search query provided")
+            
+        try:
+            query_embedding = self.embedder.embed(query)
+            results = self.vector_db.search(
+                query_vector=query_embedding,
+                limit=limit
+            )
+            return [result.payload for result in results]
+        except Exception as e:
+            raise Exception(f"Error in TextKnowledgeBase.search(): {str(e)}")
 
 #initializing the session state variables
 def init_session_state():
@@ -112,12 +131,18 @@ def process_document(uploaded_file, vector_db: Qdrant):
     if not st.session_state.openai_api_key:
         raise ValueError("OpenAI API key not provided")
         
+    if not uploaded_file:
+        raise ValueError("No file uploaded")
+        
     os.environ['OPENAI_API_KEY'] = st.session_state.openai_api_key
     
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_file_path = os.path.join(temp_dir, uploaded_file.name)
-        with open(temp_file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
+        try:
+            with open(temp_file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+        except Exception as e:
+            raise Exception(f"Error saving uploaded file: {str(e)}")
 
         try:
             # Initialize embedder
@@ -128,31 +153,40 @@ def process_document(uploaded_file, vector_db: Qdrant):
 
             # Check if file is PDF
             if uploaded_file.name.lower().endswith('.pdf'):
-                knowledge_base = PDFKnowledgeBase(
-                    path=temp_dir, 
-                    vector_db=vector_db, 
-                    reader=PDFReader(chunk=True),
-                    embedder=embedder,
-                    recreate_vector_db=True  
-                )
-                knowledge_base.load()
+                try:
+                    knowledge_base = PDFKnowledgeBase(
+                        path=temp_dir, 
+                        vector_db=vector_db, 
+                        reader=PDFReader(chunk=True),
+                        embedder=embedder,
+                        recreate_vector_db=True  
+                    )
+                    knowledge_base.load()
+                except Exception as e:
+                    raise Exception(f"Error processing PDF: {str(e)}")
             else:
-                # Initialize MarkItDown for other file types
-                markitdown = MarkItDown(
-                    mlm_client=openai.OpenAI(api_key=st.session_state.openai_api_key),
-                    mlm_model="gpt-4"
-                )
-                
-                # Convert document to markdown
-                conversion_result = markitdown.convert(temp_file_path)
-                
-                # Create and load knowledge base using the converted content
-                knowledge_base = TextKnowledgeBase(
-                    content=conversion_result.text_content,
-                    vector_db=vector_db,
-                    embedder=embedder
-                )
-                knowledge_base.load()
+                try:
+                    # Initialize MarkItDown for other file types
+                    markitdown = MarkItDown(
+                        mlm_client=openai.OpenAI(api_key=st.session_state.openai_api_key),
+                        mlm_model="gpt-4"
+                    )
+                    
+                    # Convert document to markdown
+                    conversion_result = markitdown.convert(temp_file_path)
+                    
+                    if not conversion_result or not conversion_result.text_content:
+                        raise ValueError("Document conversion produced no content")
+                    
+                    # Create and load knowledge base using the converted content
+                    knowledge_base = TextKnowledgeBase(
+                        content=conversion_result.text_content,
+                        vector_db=vector_db,
+                        embedder=embedder
+                    )
+                    knowledge_base.load()
+                except Exception as e:
+                    raise Exception(f"Error processing non-PDF document: {str(e)}")
             
             return knowledge_base
                 
