@@ -135,8 +135,19 @@ def init_session_state():
 try:
     from config import get_api_keys
     API_KEYS = get_api_keys()
-except ImportError:
+except (ImportError, ValueError) as e:
     API_KEYS = {'openai': None, 'anthropic': None, 'qdrant': None}
+    print(f"Error loading API keys: {str(e)}")
+
+def validate_api_key(key: str, key_type: str) -> bool:
+    """Validate API key format"""
+    if not key:
+        return False
+    if key_type == 'openai' and not key.startswith('sk-proj-'):
+        return False
+    if key_type == 'anthropic' and not key.startswith('sk-ant-'):
+        return False
+    return True
 
 def main():
     st.set_page_config(page_title="Legal Document Analyzer", layout="wide")
@@ -152,11 +163,16 @@ def main():
         password = st.text_input("Enter password to autofill API keys", type="password")
         if password == "Eromtej12" and not st.session_state.password_entered:
             if all(API_KEYS.values()):
-                st.session_state.openai_api_key = API_KEYS['openai']
-                st.session_state.anthropic_api_key = API_KEYS['anthropic']
-                st.session_state.qdrant_api_key = API_KEYS['qdrant']
-                st.session_state.password_entered = True
-                st.success("API keys autofilled successfully!")
+                # Validate keys before setting
+                if validate_api_key(API_KEYS['openai'], 'openai') and \
+                   validate_api_key(API_KEYS['anthropic'], 'anthropic'):
+                    st.session_state.openai_api_key = API_KEYS['openai']
+                    st.session_state.anthropic_api_key = API_KEYS['anthropic']
+                    st.session_state.qdrant_api_key = API_KEYS['qdrant']
+                    st.session_state.password_entered = True
+                    st.success("API keys autofilled successfully!")
+                else:
+                    st.error("Invalid API key format detected. Please check your config.py file.")
             else:
                 st.error("Config file not found or API keys not properly configured")
    
