@@ -54,8 +54,8 @@ class TextKnowledgeBase:
             if not chunks:
                 raise ValueError("No valid text chunks generated from content")
             
-            # Generate embeddings using embed_batch for multiple texts
-            embeddings = self.embedder.embed_batch(chunks)
+            # Generate embeddings using embed_many for multiple texts
+            embeddings = self.embedder.embed_many(chunks)
             
             # Store in Qdrant with metadata
             points = []
