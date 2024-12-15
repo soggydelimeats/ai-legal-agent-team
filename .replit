@@ -5,7 +5,8 @@ run = "streamlit run legal_agent_team.py"
 channel = "stable-24_05"
 
 [deployment]
-run = ["sh", "-c", "streamlit run legal_agent_team.py"]
+run = ["sh", "-c", "streamlit run --server.address 0.0.0.0 --server.headless true --server.enableCORS=false --server.enableWebsocketCompression=false legal_agent_team.py"]
+deploymentTarget = "cloudrun"
 
 [[ports]]
 localPort = 8501
