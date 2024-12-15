@@ -1,18 +1,17 @@
 import streamlit as st
 from phi.agent import Agent
 from phi.knowledge.pdf import PDFKnowledgeBase, PDFReader
-from phi.knowledge.base import KnowledgeBase
 from phi.vectordb.qdrant import Qdrant
 from phi.tools.duckduckgo import DuckDuckGo
 from phi.model.openai import OpenAIChat
 from phi.embedder.openai import OpenAIEmbedder
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import tempfile
 import os
 import openai
 from markitdown import MarkItDown
 
-class TextKnowledgeBase(KnowledgeBase):
+class TextKnowledgeBase:
     """Custom knowledge base class for handling text content"""
     
     def __init__(
@@ -23,7 +22,6 @@ class TextKnowledgeBase(KnowledgeBase):
         chunk_size: int = 1500,
         chunk_overlap: int = 100
     ):
-        super().__init__()
         self.content = content
         self.vector_db = vector_db
         self.embedder = embedder
@@ -60,7 +58,7 @@ class TextKnowledgeBase(KnowledgeBase):
         except Exception as e:
             raise Exception(f"Error getting embeddings: {str(e)}")
 
-    def load(self):
+    def load(self) -> 'TextKnowledgeBase':
         """Process and load the content into the vector database"""
         try:
             # Split content into chunks
@@ -83,7 +81,7 @@ class TextKnowledgeBase(KnowledgeBase):
         except Exception as e:
             raise Exception(f"Error in TextKnowledgeBase.load(): {str(e)}")
 
-    def search(self, query: str, limit: int = 5) -> List[dict]:
+    def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """Search the knowledge base for relevant content"""
         if not query:
             raise ValueError("No search query provided")
@@ -98,6 +96,17 @@ class TextKnowledgeBase(KnowledgeBase):
             return [result.payload for result in results]
         except Exception as e:
             raise Exception(f"Error in TextKnowledgeBase.search(): {str(e)}")
+
+    def get_relevant_knowledge(self, query: str, limit: int = 5) -> str:
+        """Get relevant knowledge as a string, matching the interface expected by phi"""
+        try:
+            results = self.search(query, limit=limit)
+            if not results:
+                return ""
+            return "\n\n".join(result["text"] for result in results)
+        except Exception as e:
+            print(f"Error getting relevant knowledge: {str(e)}")
+            return ""
 
 def init_qdrant():
     """Initialize Qdrant vector database"""
