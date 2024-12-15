@@ -222,7 +222,7 @@ def main():
 
         qdrant_url = st.text_input(
             "Qdrant URL",
-            value=st.session_state.qdrant_url if st.session_state.qdrant_url else "https://f499085c-b4bf-4bda-a9a5-227f62a9ca20.us-west-2-0.aws.cloud.qdrant.io:6333",
+            value=st.session_state.qdrant_url if st.session_state.qdrant_url else "https://2add81f2-7d7c-4617-816c-dbb1b7a85539.europe-west3-0.gcp.cloud.qdrant.io:6333",
             help="Enter your Qdrant instance URL"
         )
         if qdrant_url:
