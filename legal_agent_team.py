@@ -218,9 +218,10 @@ def main():
                             if not st.session_state.anthropic_api_key:
                                 st.error("Anthropic API key is required to use Claude models")
                                 return
-                            # Set environment variable for Anthropic
-                            os.environ['ANTHROPIC_API_KEY'] = st.session_state.anthropic_api_key
-                            model = Claude(id=st.session_state.selected_model)
+                            model = Claude(
+                                model=st.session_state.selected_model,
+                                api_key=st.session_state.anthropic_api_key
+                            )
                         else:
                             if not st.session_state.openai_api_key:
                                 st.error("OpenAI API key is required to use OpenAI models")
@@ -243,6 +244,7 @@ def main():
                                 "Accurately cite all sources used.",
                                 "Provide concise summaries of findings.",
                                 "Reference specific sections of the uploaded document when relevant.",
+                                "You are giving final reports, do not give partial responses and ask follow up questions.",
                                 "Do not create your own sources, use only those provided by DuckDuckGo or the knowledge base."
                             ],
                             show_tool_calls=True,
@@ -258,6 +260,7 @@ def main():
                             instructions=[
                                 "Thoroughly review the contract to identify key terms, obligations, and potential issues.",
                                 "Reference specific clauses from the uploaded document.",
+                                "You are giving final reports, do not give partial responses and ask follow up questions.",
                                 "Summarize findings in a clear and concise manner."
                             ],
                             markdown=True
@@ -272,6 +275,7 @@ def main():
                             instructions=[
                                 "Develop strategic legal recommendations based on the document analysis.",
                                 "Provide actionable steps considering identified risks and opportunities.",
+                                "You are giving final reports, do not give partial responses and ask follow up questions.",
                                 "Ensure recommendations are supported by evidence from the document."
                             ],
                             markdown=True
