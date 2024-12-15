@@ -177,16 +177,16 @@ def main():
                         # Initialize agents
                         legal_researcher = Agent(
                             name="Legal Researcher",
-                            role="Legal research specialist",
-                            model=OpenAIChat(model="gpt-4o"),
+                            role="Legal Research Specialist",
+                            model=OpenAIChat(model="o1-mini"),
                             tools=[DuckDuckGo()],
                             knowledge=st.session_state.knowledge_base,
                             search_knowledge=True,
                             instructions=[
-                                "Find and cite relevant legal cases and precedents",
-                                "Provide detailed research summaries with sources",
-                                "Reference specific sections from the uploaded document",
-                                "Always search the knowledge base for relevant information"
+                                "Search relevant legal databases and external sources for applicable cases and precedents.",
+                                "Accurately cite all sources used.",
+                                "Provide concise summaries of findings.",
+                                "Reference specific sections of the uploaded document when relevant."
                             ],
                             show_tool_calls=True,
                             markdown=True
@@ -194,28 +194,28 @@ def main():
 
                         contract_analyst = Agent(
                             name="Contract Analyst",
-                            role="Contract analysis specialist",
-                            model=OpenAIChat(model="gpt-4o"),
+                            role="Contract Analysis Specialist",
+                            model=OpenAIChat(model="o1-mini"),
                             knowledge=knowledge_base,
                             search_knowledge=True,
                             instructions=[
-                                "Review contracts thoroughly",
-                                "Identify key terms and potential issues",
-                                "Reference specific clauses from the document"
+                                "Thoroughly review the contract to identify key terms, obligations, and potential issues.",
+                                "Reference specific clauses from the uploaded document.",
+                                "Summarize findings in a clear and concise manner."
                             ],
                             markdown=True
                         )
 
                         legal_strategist = Agent(
                             name="Legal Strategist", 
-                            role="Legal strategy specialist",
-                            model=OpenAIChat(model="gpt-4o"),
+                            role="Legal Strategy Specialist",
+                            model=OpenAIChat(model="o1-mini"),
                             knowledge=knowledge_base,
                             search_knowledge=True,
                             instructions=[
-                                "Develop comprehensive legal strategies",
-                                "Provide actionable recommendations",
-                                "Consider both risks and opportunities"
+                                "Develop strategic legal recommendations based on the document analysis.",
+                                "Provide actionable steps considering identified risks and opportunities.",
+                                "Ensure recommendations are supported by evidence from the document."
                             ],
                             markdown=True
                         )
@@ -223,17 +223,17 @@ def main():
                         # Legal Agent Team
                         st.session_state.legal_team = Agent(
                             name="Legal Team Lead",
-                            role="Legal team coordinator",
-                            model=OpenAIChat(model="gpt-4o"),
+                            role="Legal Team Coordinator",
+                            model=OpenAIChat(model="o1-mini"),
                             team=[legal_researcher, contract_analyst, legal_strategist],
                             knowledge=st.session_state.knowledge_base,
                             search_knowledge=True,
                             instructions=[
-                                "Coordinate analysis between team members",
-                                "Provide comprehensive responses",
-                                "Ensure all recommendations are properly sourced",
-                                "Reference specific parts of the uploaded document",
-                                "Always search the knowledge base before delegating tasks"
+                                "Coordinate efforts between Legal Researcher, Contract Analyst, and Legal Strategist.",
+                                "Synthesize findings from all team members to provide comprehensive insights.",
+                                "Ensure all recommendations are well-sourced and referenced appropriately.",
+                                "Refer to specific sections of the uploaded document as needed.",
+                                "Utilize the knowledge base effectively before delegating tasks to team members."
                             ],
                             show_tool_calls=True,
                             markdown=True
