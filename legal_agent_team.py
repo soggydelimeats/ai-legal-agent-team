@@ -27,7 +27,6 @@ class TextKnowledgeBase:
         self.embedder = embedder
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.client = openai.OpenAI(api_key=embedder.api_key)
 
     def _chunk_text(self, text: str) -> List[str]:
         """Split text into chunks with overlap"""
@@ -47,17 +46,6 @@ class TextKnowledgeBase:
             start = end
         return chunks
 
-    def _get_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Get embeddings for a list of texts using OpenAI's API directly"""
-        try:
-            response = self.client.embeddings.create(
-                model="text-embedding-3-small",
-                input=texts
-            )
-            return [item.embedding for item in response.data]
-        except Exception as e:
-            raise Exception(f"Error getting embeddings: {str(e)}")
-
     def load(self) -> 'TextKnowledgeBase':
         """Process and load the content into the vector database"""
         try:
@@ -66,44 +54,45 @@ class TextKnowledgeBase:
             if not chunks:
                 raise ValueError("No valid text chunks generated from content")
             
-            # Generate embeddings using OpenAI's API directly
-            embeddings = self._get_embeddings(chunks)
-            
-            # Store in Qdrant with metadata
-            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                self.vector_db.upsert(
-                    ids=[i],
+            # Create embeddings and store in vector database
+            for i, chunk in enumerate(chunks):
+                embedding = self.embedder.embed(chunk)
+                self.vector_db.add_points(
                     vectors=[embedding],
-                    payloads=[{"text": chunk, "chunk_index": i}]
+                    documents=[chunk],
+                    metadatas=[{"chunk_index": i}],
+                    ids=[str(i)]
                 )
             return self
             
         except Exception as e:
             raise Exception(f"Error in TextKnowledgeBase.load(): {str(e)}")
 
-    def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Search the knowledge base for relevant content"""
-        if not query:
-            raise ValueError("No search query provided")
-            
+    def get_relevant_knowledge(self, query: str, limit: int = 5) -> str:
+        """Get relevant knowledge as a string, matching the interface expected by phi"""
         try:
-            # Get query embedding using OpenAI's API directly
-            query_embedding = self._get_embeddings([query])[0]
+            # Get query embedding
+            query_embedding = self.embedder.embed(query)
+            
+            # Search vector database
             results = self.vector_db.search(
                 query_vector=query_embedding,
                 limit=limit
             )
-            return [result.payload for result in results]
-        except Exception as e:
-            raise Exception(f"Error in TextKnowledgeBase.search(): {str(e)}")
-
-    def get_relevant_knowledge(self, query: str, limit: int = 5) -> str:
-        """Get relevant knowledge as a string, matching the interface expected by phi"""
-        try:
-            results = self.search(query, limit=limit)
+            
             if not results:
                 return ""
-            return "\n\n".join(result["text"] for result in results)
+                
+            # Extract and join the text from results
+            texts = []
+            for result in results:
+                if hasattr(result, 'document'):
+                    texts.append(result.document)
+                elif hasattr(result, 'payload') and 'text' in result.payload:
+                    texts.append(result.payload['text'])
+            
+            return "\n\n".join(texts)
+            
         except Exception as e:
             print(f"Error getting relevant knowledge: {str(e)}")
             return ""
