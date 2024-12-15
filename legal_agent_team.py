@@ -1,6 +1,7 @@
 import streamlit as st
 from phi.agent import Agent
 from phi.knowledge.pdf import PDFKnowledgeBase, PDFReader
+from phi.knowledge.text import TextKnowledgeBase
 from phi.vectordb.qdrant import Qdrant
 from phi.tools.duckduckgo import DuckDuckGo
 from phi.model.openai import OpenAIChat
@@ -10,92 +11,6 @@ import tempfile
 import os
 import openai
 from markitdown import MarkItDown
-
-class TextKnowledgeBase:
-    """Custom knowledge base class for handling text content"""
-    
-    def __init__(
-        self,
-        content: str,
-        vector_db: Qdrant,
-        embedder: OpenAIEmbedder,
-        chunk_size: int = 1500,
-        chunk_overlap: int = 100
-    ):
-        self.content = content
-        self.vector_db = vector_db
-        self.embedder = embedder
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
-
-    def _chunk_text(self, text: str) -> List[str]:
-        """Split text into chunks with overlap"""
-        if not text:
-            raise ValueError("No text content provided for chunking")
-            
-        chunks = []
-        start = 0
-        while start < len(text):
-            end = start + self.chunk_size
-            # If this isn't the first chunk, back up to include overlap
-            if start > 0:
-                start = start - self.chunk_overlap
-            chunk = text[start:end]
-            if chunk.strip():  # Only add non-empty chunks
-                chunks.append(chunk)
-            start = end
-        return chunks
-
-    def load(self) -> 'TextKnowledgeBase':
-        """Process and load the content into the vector database"""
-        try:
-            # Split content into chunks
-            chunks = self._chunk_text(self.content)
-            if not chunks:
-                raise ValueError("No valid text chunks generated from content")
-            
-            # Create embeddings and store in vector database
-            for i, chunk in enumerate(chunks):
-                embedding = self.embedder.embed_text(chunk)
-                self.vector_db.add_points(
-                    vectors=[embedding],
-                    documents=[chunk],
-                    metadatas=[{"chunk_index": i}],
-                    ids=[str(i)]
-                )
-            return self
-            
-        except Exception as e:
-            raise Exception(f"Error in TextKnowledgeBase.load(): {str(e)}")
-
-    def get_relevant_knowledge(self, query: str, limit: int = 5) -> str:
-        """Get relevant knowledge as a string, matching the interface expected by phi"""
-        try:
-            # Get query embedding
-            query_embedding = self.embedder.embed_text(query)
-            
-            # Search vector database
-            results = self.vector_db.search(
-                query_vector=query_embedding,
-                limit=limit
-            )
-            
-            if not results:
-                return ""
-                
-            # Extract and join the text from results
-            texts = []
-            for result in results:
-                if hasattr(result, 'document'):
-                    texts.append(result.document)
-                elif hasattr(result, 'payload') and 'text' in result.payload:
-                    texts.append(result.payload['text'])
-            
-            return "\n\n".join(texts)
-            
-        except Exception as e:
-            print(f"Error getting relevant knowledge: {str(e)}")
-            return ""
 
 def init_qdrant():
     """Initialize Qdrant vector database"""
@@ -112,22 +27,6 @@ def init_qdrant():
         timeout=None,
         distance="cosine"
     )
-
-#initializing the session state variables
-def init_session_state():
-    """Initialize session state variables"""
-    if 'openai_api_key' not in st.session_state:
-        st.session_state.openai_api_key = None
-    if 'qdrant_api_key' not in st.session_state:
-        st.session_state.qdrant_api_key = None
-    if 'qdrant_url' not in st.session_state:
-        st.session_state.qdrant_url = None
-    if 'vector_db' not in st.session_state:
-        st.session_state.vector_db = None
-    if 'legal_team' not in st.session_state:
-        st.session_state.legal_team = None
-    if 'knowledge_base' not in st.session_state:
-        st.session_state.knowledge_base = None
 
 def process_document(uploaded_file, vector_db: Qdrant):
     """Process document, create embeddings and store in Qdrant vector database"""
@@ -181,11 +80,17 @@ def process_document(uploaded_file, vector_db: Qdrant):
                     if not conversion_result or not conversion_result.text_content:
                         raise ValueError("Document conversion produced no content")
                     
-                    # Create and load knowledge base using the converted content
+                    # Create text file from converted content
+                    text_file_path = os.path.join(temp_dir, "converted.txt")
+                    with open(text_file_path, "w") as f:
+                        f.write(conversion_result.text_content)
+                    
+                    # Create and load knowledge base using phidata's TextKnowledgeBase
                     knowledge_base = TextKnowledgeBase(
-                        content=conversion_result.text_content,
+                        path=temp_dir,
                         vector_db=vector_db,
-                        embedder=embedder
+                        embedder=embedder,
+                        recreate_vector_db=True
                     )
                     knowledge_base.load()
                 except Exception as e:
@@ -195,6 +100,21 @@ def process_document(uploaded_file, vector_db: Qdrant):
                 
         except Exception as e:
             raise Exception(f"Error processing document: {str(e)}")
+
+def init_session_state():
+    """Initialize session state variables"""
+    if 'openai_api_key' not in st.session_state:
+        st.session_state.openai_api_key = None
+    if 'qdrant_api_key' not in st.session_state:
+        st.session_state.qdrant_api_key = None
+    if 'qdrant_url' not in st.session_state:
+        st.session_state.qdrant_url = None
+    if 'vector_db' not in st.session_state:
+        st.session_state.vector_db = None
+    if 'legal_team' not in st.session_state:
+        st.session_state.legal_team = None
+    if 'knowledge_base' not in st.session_state:
+        st.session_state.knowledge_base = None
 
 def main():
     st.set_page_config(page_title="Legal Document Analyzer", layout="wide")
