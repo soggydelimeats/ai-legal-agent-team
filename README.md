@@ -4,6 +4,13 @@ A Streamlit application that simulates a full-service legal team using multiple 
 
 ## Features
 
+- **Multi-Format Document Support**
+  - PDF files
+  - Microsoft Office files (DOCX, PPTX, XLSX)
+  - Text files (TXT, HTML, HTM)
+  - Data files (CSV, JSON, XML)
+  - Automatic document conversion to processable format
+
 - **Specialized Legal AI Agent Team**
   - **Legal Researcher**: Equipped with DuckDuckGo search tool to find and cite relevant legal cases and precedents. Provides detailed research summaries with sources and references specific sections from uploaded documents.
   
@@ -42,15 +49,16 @@ A Streamlit application that simulates a full-service legal team using multiple 
    ```
 4. **Use the Interface**
    - Enter API credentials
-   - Upload a legal document (PDF)
+   - Upload any supported document type
    - Select analysis type
    - Add custom queries if needed
    - View analysis results
 
 ## Notes
 
-- Supports PDF documents only
+- Supports multiple document formats
 - Uses GPT-4o for analysis
 - Uses text-embedding-3-small for embeddings
+- Uses MarkItDown for document conversion
 - Requires stable internet connection
 - API usage costs apply

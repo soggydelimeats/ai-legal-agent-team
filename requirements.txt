@@ -1,6 +1,7 @@
 phidata==2.5.33       
 streamlit==1.40.2     
 qdrant-client==1.12.1         
-openai
-markitdown                 
+openai>=1.0.0
+markitdown>=1.0.0
+typing-extensions>=4.5.0
                

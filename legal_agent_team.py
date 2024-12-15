@@ -1,13 +1,72 @@
 import streamlit as st
 from phi.agent import Agent
+from phi.knowledge import Knowledge
 from phi.knowledge.pdf import PDFKnowledgeBase, PDFReader
 from phi.vectordb.qdrant import Qdrant
 from phi.tools.duckduckgo import DuckDuckGo
 from phi.model.openai import OpenAIChat
 from phi.embedder.openai import OpenAIEmbedder
+from typing import List, Optional
 import tempfile
 import os
 import openai
+from markitdown import MarkItDown
+
+class TextKnowledgeBase(Knowledge):
+    """Custom knowledge base class for handling text content"""
+    
+    def __init__(
+        self,
+        content: str,
+        vector_db: Qdrant,
+        embedder: OpenAIEmbedder,
+        chunk_size: int = 1500,
+        chunk_overlap: int = 100
+    ):
+        super().__init__()
+        self.content = content
+        self.vector_db = vector_db
+        self.embedder = embedder
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+
+    def _chunk_text(self, text: str) -> List[str]:
+        """Split text into chunks with overlap"""
+        chunks = []
+        start = 0
+        while start < len(text):
+            end = start + self.chunk_size
+            # If this isn't the first chunk, back up to include overlap
+            if start > 0:
+                start = start - self.chunk_overlap
+            chunk = text[start:end]
+            chunks.append(chunk)
+            start = end
+        return chunks
+
+    def load(self):
+        """Process and load the content into the vector database"""
+        # Split content into chunks
+        chunks = self._chunk_text(self.content)
+        
+        # Generate embeddings and store in vector database
+        embeddings = self.embedder.embed_documents(chunks)
+        
+        # Store in Qdrant with metadata
+        points = []
+        for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            points.append({
+                "id": i,
+                "vector": embedding,
+                "payload": {
+                    "text": chunk,
+                    "chunk_index": i
+                }
+            })
+        
+        # Upload to Qdrant
+        self.vector_db.upsert(points=points)
+        return self
 
 #initializing the session state variables
 def init_session_state():
@@ -49,28 +108,47 @@ def process_document(uploaded_file, vector_db: Qdrant):
     os.environ['OPENAI_API_KEY'] = st.session_state.openai_api_key
     
     with tempfile.TemporaryDirectory() as temp_dir:
-      
         temp_file_path = os.path.join(temp_dir, uploaded_file.name)
         with open(temp_file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
         try:
-       
+            # Initialize embedder
             embedder = OpenAIEmbedder(
                 model="text-embedding-3-small",
                 api_key=st.session_state.openai_api_key
             )
+
+            # Check if file is PDF
+            if uploaded_file.name.lower().endswith('.pdf'):
+                knowledge_base = PDFKnowledgeBase(
+                    path=temp_dir, 
+                    vector_db=vector_db, 
+                    reader=PDFReader(chunk=True),
+                    embedder=embedder,
+                    recreate_vector_db=True  
+                )
+                knowledge_base.load()
+            else:
+                # Initialize MarkItDown for other file types
+                markitdown = MarkItDown(
+                    mlm_client=openai.OpenAI(api_key=st.session_state.openai_api_key),
+                    mlm_model="gpt-4"
+                )
+                
+                # Convert document to markdown
+                conversion_result = markitdown.convert(temp_file_path)
+                
+                # Create and load knowledge base using the converted content
+                knowledge_base = TextKnowledgeBase(
+                    content=conversion_result.text_content,
+                    vector_db=vector_db,
+                    embedder=embedder
+                )
+                knowledge_base.load()
             
-            # Creating knowledge base with explicit Qdrant configuration
-            knowledge_base = PDFKnowledgeBase(
-                path=temp_dir, 
-                vector_db=vector_db, 
-                reader=PDFReader(chunk=True),
-                embedder=embedder,
-                recreate_vector_db=True  
-            )
-            knowledge_base.load()     
-            return knowledge_base      
+            return knowledge_base
+                
         except Exception as e:
             raise Exception(f"Error processing document: {str(e)}")
 
@@ -121,7 +199,10 @@ def main():
 
         if all([st.session_state.openai_api_key, st.session_state.vector_db]):
             st.header("📄 Document Upload")
-            uploaded_file = st.file_uploader("Upload Legal Document", type=['pdf'])
+            uploaded_file = st.file_uploader(
+                "Upload Legal Document", 
+                type=['pdf', 'docx', 'pptx', 'xlsx', 'txt', 'html', 'htm', 'csv', 'json', 'xml']
+            )
             
             if uploaded_file:
                 with st.spinner("Processing document..."):
