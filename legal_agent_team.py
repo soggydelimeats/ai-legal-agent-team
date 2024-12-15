@@ -1,6 +1,5 @@
 import streamlit as st
 from phi.agent import Agent
-from phi.knowledge import Knowledge
 from phi.knowledge.pdf import PDFKnowledgeBase, PDFReader
 from phi.vectordb.qdrant import Qdrant
 from phi.tools.duckduckgo import DuckDuckGo
@@ -12,7 +11,7 @@ import os
 import openai
 from markitdown import MarkItDown
 
-class TextKnowledgeBase(Knowledge):
+class TextKnowledgeBase:
     """Custom knowledge base class for handling text content"""
     
     def __init__(
@@ -23,7 +22,6 @@ class TextKnowledgeBase(Knowledge):
         chunk_size: int = 1500,
         chunk_overlap: int = 100
     ):
-        super().__init__()
         self.content = content
         self.vector_db = vector_db
         self.embedder = embedder
@@ -67,6 +65,15 @@ class TextKnowledgeBase(Knowledge):
         # Upload to Qdrant
         self.vector_db.upsert(points=points)
         return self
+
+    def search(self, query: str, limit: int = 5) -> List[dict]:
+        """Search the knowledge base for relevant content"""
+        query_embedding = self.embedder.embed_query(query)
+        results = self.vector_db.search(
+            query_vector=query_embedding,
+            limit=limit
+        )
+        return [result.payload for result in results]
 
 #initializing the session state variables
 def init_session_state():
