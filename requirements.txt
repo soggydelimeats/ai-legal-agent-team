@@ -5,3 +5,4 @@ openai>=1.0.0
 markitdown>=1.0.0
 typing-extensions>=4.5.0
 qdrant-client>=1.7.0
+phi
