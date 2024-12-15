@@ -1,7 +1,7 @@
 import streamlit as st
 from phi.agent import Agent
 from phi.knowledge.pdf import PDFKnowledgeBase, PDFReader
-from phi.vectordb.qdrant import Qdrant
+from phi.vectordb.qdrant import Qdrant as PhiQdrant
 from phi.tools.duckduckgo import DuckDuckGo
 from phi.model.openai import OpenAIChat
 from phi.embedder.openai import OpenAIEmbedder
@@ -10,6 +10,8 @@ import tempfile
 import os
 import openai
 from markitdown import MarkItDown
+from qdrant_client import QdrantClient
+from qdrant_client.http import models
 
 class TextKnowledgeBase:
     """Custom knowledge base class for handling text content"""
@@ -17,13 +19,20 @@ class TextKnowledgeBase:
     def __init__(
         self,
         content: str,
-        vector_db: Qdrant,
+        vector_db: PhiQdrant,
         embedder: OpenAIEmbedder,
         chunk_size: int = 1500,
         chunk_overlap: int = 100
     ):
         self.content = content
-        self.vector_db = vector_db
+        self.phi_vector_db = vector_db
+        # Initialize direct Qdrant client
+        self.vector_db = QdrantClient(
+            url=vector_db.url,
+            api_key=vector_db.api_key,
+            timeout=vector_db.timeout
+        )
+        self.collection_name = vector_db.collection
         self.embedder = embedder
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -72,25 +81,20 @@ class TextKnowledgeBase:
             # Store in Qdrant with metadata
             points = []
             for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                points.append({
-                    "id": i,
-                    "vector": embedding,
-                    "payload": {
-                        "text": chunk,
-                        "chunk_index": i
-                    }
-                })
+                points.append(models.PointStruct(
+                    id=i,
+                    vector=embedding,
+                    payload={"text": chunk, "chunk_index": i}
+                ))
             
             if not points:
                 raise ValueError("No valid embeddings generated")
                 
-            # Upload to Qdrant - using correct method signature
-            for point in points:
-                self.vector_db.add(
-                    vectors=[point["vector"]],
-                    payloads=[point["payload"]],
-                    ids=[point["id"]]
-                )
+            # Upload to Qdrant using the direct client
+            self.vector_db.upsert(
+                collection_name=self.collection_name,
+                points=points
+            )
             return self
             
         except Exception as e:
@@ -104,11 +108,14 @@ class TextKnowledgeBase:
         try:
             # Get query embedding using OpenAI's API directly
             query_embedding = self._get_embeddings([query])[0]
+            
+            # Search using the direct client
             results = self.vector_db.search(
+                collection_name=self.collection_name,
                 query_vector=query_embedding,
                 limit=limit
             )
-            return [result.payload for result in results]
+            return [hit.payload for hit in results]
         except Exception as e:
             raise Exception(f"Error in TextKnowledgeBase.search(): {str(e)}")
 
@@ -135,7 +142,7 @@ def init_qdrant():
     if not st.session_state.qdrant_url:
         raise ValueError("Qdrant URL not provided")
         
-    return Qdrant(          
+    return PhiQdrant(          
         collection="legal_knowledge",
         url=st.session_state.qdrant_url,
         api_key=st.session_state.qdrant_api_key,
@@ -144,7 +151,7 @@ def init_qdrant():
         distance="cosine"
     )
 
-def process_document(uploaded_file, vector_db: Qdrant):
+def process_document(uploaded_file, vector_db: PhiQdrant):
     """Process document, create embeddings and store in Qdrant vector database"""
     if not st.session_state.openai_api_key:
         raise ValueError("OpenAI API key not provided")
