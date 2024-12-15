@@ -179,7 +179,7 @@ def main():
         st.header("🤖 Model Configuration")
         model_option = st.selectbox(
             "Select Language Model",
-            options=["o1-mini", "gpt-4o", "claude-3-5-sonnet"],
+            options=["o1-mini", "gpt-4o", "claude-3-5-sonnet-20240620"],
             index=0 if st.session_state.selected_model == "o1-mini" else 1 if st.session_state.selected_model == "gpt-4o" else 2,
             help="Choose the language model to use for analysis"
         )
@@ -205,7 +205,7 @@ def main():
                         st.session_state.knowledge_base = knowledge_base
                         
                         # Validate API keys based on selected model
-                        if st.session_state.selected_model == "claude-3-5-sonnet" and not st.session_state.anthropic_api_key:
+                        if st.session_state.selected_model == "claude-3-5-sonnet-20240620" and not st.session_state.anthropic_api_key:
                             st.error("Anthropic API key is required to use Claude models")
                             return
                         elif st.session_state.selected_model in ["o1-mini", "gpt-4o"] and not st.session_state.openai_api_key:
@@ -213,13 +213,22 @@ def main():
                             return
 
                         # Configure model based on selection
-                        if st.session_state.selected_model == "claude-3-5-sonnet":
+                        if st.session_state.selected_model == "claude-3-5-sonnet-20240620":
+                            if not st.session_state.anthropic_api_key:
+                                st.error("Anthropic API key is required to use Claude models")
+                                return
                             model = Claude(
-                                model="claude-3-5-sonnet-20240620",
+                                id=st.session_state.selected_model,
                                 api_key=st.session_state.anthropic_api_key
                             )
                         else:
-                            model = OpenAIChat(model=st.session_state.selected_model)
+                            if not st.session_state.openai_api_key:
+                                st.error("OpenAI API key is required to use OpenAI models")
+                                return
+                            model = OpenAIChat(
+                                model=st.session_state.selected_model,
+                                api_key=st.session_state.openai_api_key
+                            )
                         
                         # Initialize agents
                         legal_researcher = Agent(
