@@ -27,6 +27,7 @@ class TextKnowledgeBase:
         self.embedder = embedder
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.client = openai.OpenAI(api_key=embedder.api_key)
 
     def _chunk_text(self, text: str) -> List[str]:
         """Split text into chunks with overlap"""
@@ -46,6 +47,17 @@ class TextKnowledgeBase:
             start = end
         return chunks
 
+    def _get_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """Get embeddings for a list of texts using OpenAI's API directly"""
+        try:
+            response = self.client.embeddings.create(
+                model="text-embedding-3-small",
+                input=texts
+            )
+            return [item.embedding for item in response.data]
+        except Exception as e:
+            raise Exception(f"Error getting embeddings: {str(e)}")
+
     def load(self):
         """Process and load the content into the vector database"""
         try:
@@ -54,8 +66,8 @@ class TextKnowledgeBase:
             if not chunks:
                 raise ValueError("No valid text chunks generated from content")
             
-            # Generate embeddings using embed_many for multiple texts
-            embeddings = self.embedder.embed_many(chunks)
+            # Generate embeddings using OpenAI's API directly
+            embeddings = self._get_embeddings(chunks)
             
             # Store in Qdrant with metadata
             points = []
@@ -85,8 +97,8 @@ class TextKnowledgeBase:
             raise ValueError("No search query provided")
             
         try:
-            # Use embed for single text
-            query_embedding = self.embedder.embed(query)
+            # Get query embedding using OpenAI's API directly
+            query_embedding = self._get_embeddings([query])[0]
             results = self.vector_db.search(
                 query_vector=query_embedding,
                 limit=limit
