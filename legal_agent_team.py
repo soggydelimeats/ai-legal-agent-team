@@ -282,12 +282,32 @@ def main():
                             markdown=True
                         )
 
+                        # Add new Legal Chat Agent
+                        legal_chat_agent = Agent(
+                            name="Legal Chat Assistant",
+                            role="Interactive Legal Consultant",
+                            model=model,
+                            tools=[DuckDuckGo()],
+                            knowledge=knowledge_base,
+                            search_knowledge=True,
+                            instructions=[
+                                "Engage in interactive discussions about the analyzed document and its legal implications.",
+                                "Reference specific parts of the document and previous analysis when answering questions.",
+                                "Use DuckDuckGo to search for additional legal information when needed.",
+                                "Maintain context of the conversation and previous analyses.",
+                                "Provide clear, accurate responses with citations when applicable.",
+                                "Ask for clarification if a user's question is ambiguous."
+                            ],
+                            show_tool_calls=True,
+                            markdown=True
+                        )
+
                         # Legal Agent Team
                         st.session_state.legal_team = Agent(
                             name="Legal Team Lead",
                             role="Legal Team Coordinator",
                             model=model,
-                            team=[legal_researcher, contract_analyst, legal_strategist],
+                            team=[legal_researcher, contract_analyst, legal_strategist, legal_chat_agent],
                             knowledge=st.session_state.knowledge_base,
                             search_knowledge=True,
                             instructions=[
@@ -457,6 +477,64 @@ def main():
 
                     except Exception as e:
                         st.error(f"Error during analysis: {str(e)}")
+
+        # Add chat interface after analysis is complete
+        if 'messages' not in st.session_state:
+            st.session_state.messages = []
+
+        st.divider()
+        st.header("💬 Legal Chat Assistant")
+        st.info("Ask questions about the document and analysis. The Legal Chat Assistant has access to the document, previous analysis, and can search for additional information.")
+
+        # Display chat messages
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        # Chat input
+        if prompt := st.chat_input("Ask a question about the document or analysis..."):
+            # Add user message to chat history
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            
+            # Display user message
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            # Get AI response
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    # Create context from previous analysis
+                    context = f"""
+                    Previous document analysis and findings:
+                    {response.content if hasattr(response, 'content') else ''}
+                    
+                    Key Points:
+                    {key_points_response.content if hasattr(key_points_response, 'content') else ''}
+                    
+                    Recommendations:
+                    {recommendations_response.content if hasattr(recommendations_response, 'content') else ''}
+                    
+                    User Question: {prompt}
+                    """
+                    
+                    chat_response = legal_chat_agent.run(context)
+                    
+                    if chat_response.content:
+                        st.markdown(chat_response.content)
+                        # Add assistant response to chat history
+                        st.session_state.messages.append({"role": "assistant", "content": chat_response.content})
+                    else:
+                        for message in chat_response.messages:
+                            if message.role == 'assistant' and message.content:
+                                st.markdown(message.content)
+                                # Add assistant response to chat history
+                                st.session_state.messages.append({"role": "assistant", "content": message.content})
+
+        # Add clear chat button
+        if st.session_state.messages:
+            if st.button("Clear Chat History"):
+                st.session_state.messages = []
+                st.rerun()
     else:
         st.info("Please upload a legal document to begin analysis")
 

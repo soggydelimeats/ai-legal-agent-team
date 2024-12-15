@@ -19,6 +19,8 @@ A Streamlit application that simulates a full-service legal team using multiple 
   - **Legal Strategist**: Focuses on developing comprehensive legal strategies, providing actionable recommendations while considering both risks and opportunities.
   
   - **Team Lead**: Coordinates analysis between team members, ensures comprehensive responses, properly sourced recommendations, and references to specific document parts. Acts as an Agent Team coordinator for all three agents.
+  
+  - **Legal Chat Assistant**: Interactive agent for follow-up discussions about the document and analysis. Can access document content, previous analysis, and search for additional information to answer specific questions.
 
 - **Document Analysis Types**
   - Contract Review - Done by Contract Analyst
@@ -26,6 +28,13 @@ A Streamlit application that simulates a full-service legal team using multiple 
   - Risk Assessment - Done by Legal Strategist, Contract Analyst
   - Compliance Check - Done by Legal Strategist, Legal Researcher, Contract Analyst
   - Custom Queries - Done by Agent Team - Legal Researcher, Legal Strategist, Contract Analyst
+
+- **Interactive Features**
+  - Real-time chat interface for document discussion
+  - Context-aware responses based on previous analysis
+  - Web search capability for additional information
+  - Persistent chat history
+  - Clear chat functionality
 
 ## How to Run
 
