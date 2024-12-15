@@ -4,3 +4,4 @@ qdrant-client==1.12.1
 openai>=1.0.0
 markitdown>=1.0.0
 typing-extensions>=4.5.0
+anthropic>=0.18.0
