@@ -1,119 +1,13 @@
 import streamlit as st
 from phi.agent import Agent
 from phi.knowledge.pdf import PDFKnowledgeBase, PDFReader
-from phi.knowledge.base import KnowledgeBase
 from phi.vectordb.qdrant import Qdrant
 from phi.tools.duckduckgo import DuckDuckGo
 from phi.model.openai import OpenAIChat
 from phi.embedder.openai import OpenAIEmbedder
-from typing import List, Optional
 import tempfile
 import os
 import openai
-from markitdown import MarkItDown
-
-class TextKnowledgeBase(KnowledgeBase):
-    """Custom knowledge base class for handling text content"""
-    
-    def __init__(
-        self,
-        content: str,
-        vector_db: Qdrant,
-        embedder: OpenAIEmbedder,
-        chunk_size: int = 1500,
-        chunk_overlap: int = 100
-    ):
-        super().__init__()
-        self.content = content
-        self.vector_db = vector_db
-        self.embedder = embedder
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
-        self.client = openai.OpenAI(api_key=embedder.api_key)
-
-    def _chunk_text(self, text: str) -> List[str]:
-        """Split text into chunks with overlap"""
-        if not text:
-            raise ValueError("No text content provided for chunking")
-            
-        chunks = []
-        start = 0
-        while start < len(text):
-            end = start + self.chunk_size
-            # If this isn't the first chunk, back up to include overlap
-            if start > 0:
-                start = start - self.chunk_overlap
-            chunk = text[start:end]
-            if chunk.strip():  # Only add non-empty chunks
-                chunks.append(chunk)
-            start = end
-        return chunks
-
-    def _get_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Get embeddings for a list of texts using OpenAI's API directly"""
-        try:
-            response = self.client.embeddings.create(
-                model="text-embedding-3-small",
-                input=texts
-            )
-            return [item.embedding for item in response.data]
-        except Exception as e:
-            raise Exception(f"Error getting embeddings: {str(e)}")
-
-    def load(self):
-        """Process and load the content into the vector database"""
-        try:
-            # Split content into chunks
-            chunks = self._chunk_text(self.content)
-            if not chunks:
-                raise ValueError("No valid text chunks generated from content")
-            
-            # Generate embeddings using OpenAI's API directly
-            embeddings = self._get_embeddings(chunks)
-            
-            # Store in Qdrant with metadata
-            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                self.vector_db.upsert(
-                    ids=[i],
-                    vectors=[embedding],
-                    payloads=[{"text": chunk, "chunk_index": i}]
-                )
-            return self
-            
-        except Exception as e:
-            raise Exception(f"Error in TextKnowledgeBase.load(): {str(e)}")
-
-    def search(self, query: str, limit: int = 5) -> List[dict]:
-        """Search the knowledge base for relevant content"""
-        if not query:
-            raise ValueError("No search query provided")
-            
-        try:
-            # Get query embedding using OpenAI's API directly
-            query_embedding = self._get_embeddings([query])[0]
-            results = self.vector_db.search(
-                query_vector=query_embedding,
-                limit=limit
-            )
-            return [result.payload for result in results]
-        except Exception as e:
-            raise Exception(f"Error in TextKnowledgeBase.search(): {str(e)}")
-
-def init_qdrant():
-    """Initialize Qdrant vector database"""
-    if not st.session_state.qdrant_api_key:
-        raise ValueError("Qdrant API key not provided")
-    if not st.session_state.qdrant_url:
-        raise ValueError("Qdrant URL not provided")
-        
-    return Qdrant(          
-        collection="legal_knowledge",
-        url=st.session_state.qdrant_url,
-        api_key=st.session_state.qdrant_api_key,
-        https=True,
-        timeout=None,
-        distance="cosine"
-    )
 
 #initializing the session state variables
 def init_session_state():
@@ -131,70 +25,52 @@ def init_session_state():
     if 'knowledge_base' not in st.session_state:
         st.session_state.knowledge_base = None
 
+def init_qdrant():
+    """Initialize Qdrant vector database"""
+    if not st.session_state.qdrant_api_key:
+        raise ValueError("Qdrant API key not provided")
+    if not st.session_state.qdrant_url:
+        raise ValueError("Qdrant URL not provided")
+        
+    return Qdrant(          
+        collection="legal_knowledge",
+        url=st.session_state.qdrant_url,
+        api_key=st.session_state.qdrant_api_key,
+        https=True,
+        timeout=None,
+        distance="cosine"
+    )
+
 def process_document(uploaded_file, vector_db: Qdrant):
     """Process document, create embeddings and store in Qdrant vector database"""
     if not st.session_state.openai_api_key:
         raise ValueError("OpenAI API key not provided")
         
-    if not uploaded_file:
-        raise ValueError("No file uploaded")
-        
     os.environ['OPENAI_API_KEY'] = st.session_state.openai_api_key
     
     with tempfile.TemporaryDirectory() as temp_dir:
+      
         temp_file_path = os.path.join(temp_dir, uploaded_file.name)
-        try:
-            with open(temp_file_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-        except Exception as e:
-            raise Exception(f"Error saving uploaded file: {str(e)}")
+        with open(temp_file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
 
         try:
-            # Initialize embedder
+       
             embedder = OpenAIEmbedder(
                 model="text-embedding-3-small",
                 api_key=st.session_state.openai_api_key
             )
-
-            # Check if file is PDF
-            if uploaded_file.name.lower().endswith('.pdf'):
-                try:
-                    knowledge_base = PDFKnowledgeBase(
-                        path=temp_dir, 
-                        vector_db=vector_db, 
-                        reader=PDFReader(chunk=True),
-                        embedder=embedder,
-                        recreate_vector_db=True  
-                    )
-                    knowledge_base.load()
-                except Exception as e:
-                    raise Exception(f"Error processing PDF: {str(e)}")
-            else:
-                try:
-                    # Initialize MarkItDown for other file types
-                    markitdown = MarkItDown(
-                        mlm_client=openai.OpenAI(api_key=st.session_state.openai_api_key),
-                        mlm_model="gpt-4"
-                    )
-                    
-                    # Convert document to markdown
-                    conversion_result = markitdown.convert(temp_file_path)
-                    
-                    if not conversion_result or not conversion_result.text_content:
-                        raise ValueError("Document conversion produced no content")
-                    
-                    # Create and load knowledge base using the converted content
-                    knowledge_base = TextKnowledgeBase(
-                        content=conversion_result.text_content,
-                        vector_db=vector_db,
-                        embedder=embedder
-                    )
-                    knowledge_base.load()
-                except Exception as e:
-                    raise Exception(f"Error processing non-PDF document: {str(e)}")
             
-            return knowledge_base
-                
+            # Creating knowledge base with explicit Qdrant configuration
+            knowledge_base = PDFKnowledgeBase(
+                path=temp_dir, 
+                vector_db=vector_db, 
+                reader=PDFReader(chunk=True),
+                embedder=embedder,
+                recreate_vector_db=True  
+            )
+            knowledge_base.load()     
+            return knowledge_base      
         except Exception as e:
             raise Exception(f"Error processing document: {str(e)}")
 
@@ -227,7 +103,7 @@ def main():
 
         qdrant_url = st.text_input(
             "Qdrant URL",
-            value=st.session_state.qdrant_url if st.session_state.qdrant_url else "https://2add81f2-7d7c-4617-816c-dbb1b7a85539.europe-west3-0.gcp.cloud.qdrant.io:6333",
+            value=st.session_state.qdrant_url if st.session_state.qdrant_url else "https://f499085c-b4bf-4bda-a9a5-227f62a9ca20.us-west-2-0.aws.cloud.qdrant.io:6333",
             help="Enter your Qdrant instance URL"
         )
         if qdrant_url:
@@ -245,10 +121,7 @@ def main():
 
         if all([st.session_state.openai_api_key, st.session_state.vector_db]):
             st.header("📄 Document Upload")
-            uploaded_file = st.file_uploader(
-                "Upload Legal Document", 
-                type=['pdf', 'docx', 'pptx', 'xlsx', 'txt', 'html', 'htm', 'csv', 'json', 'xml']
-            )
+            uploaded_file = st.file_uploader("Upload Legal Document", type=['pdf'])
             
             if uploaded_file:
                 with st.spinner("Processing document..."):
