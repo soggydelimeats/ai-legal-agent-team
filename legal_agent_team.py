@@ -124,6 +124,7 @@ def init_session_state():
 
 def main():
     st.set_page_config(page_title="Legal Document Analyzer", layout="wide")
+    st.set_option('server.address', '0.0.0.0')
     init_session_state()
 
     st.title("AI Legal Agent Team 👨‍⚖️")
