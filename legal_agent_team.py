@@ -84,8 +84,13 @@ class TextKnowledgeBase:
             if not points:
                 raise ValueError("No valid embeddings generated")
                 
-            # Upload to Qdrant
-            self.vector_db.upsert(points=points)
+            # Upload to Qdrant - using correct method signature
+            for point in points:
+                self.vector_db.add(
+                    vectors=[point["vector"]],
+                    payloads=[point["payload"]],
+                    ids=[point["id"]]
+                )
             return self
             
         except Exception as e:
