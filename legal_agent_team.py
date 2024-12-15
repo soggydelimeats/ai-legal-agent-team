@@ -5,6 +5,7 @@ from phi.knowledge.text import TextKnowledgeBase
 from phi.vectordb.qdrant import Qdrant
 from phi.tools.duckduckgo import DuckDuckGo
 from phi.model.openai import OpenAIChat
+from phi.model.anthropic import Claude
 from phi.embedder.openai import OpenAIEmbedder
 from typing import List, Optional, Dict, Any
 import tempfile
@@ -105,6 +106,8 @@ def init_session_state():
     """Initialize session state variables"""
     if 'openai_api_key' not in st.session_state:
         st.session_state.openai_api_key = None
+    if 'anthropic_api_key' not in st.session_state:
+        st.session_state.anthropic_api_key = None
     if 'qdrant_api_key' not in st.session_state:
         st.session_state.qdrant_api_key = None
     if 'qdrant_url' not in st.session_state:
@@ -115,6 +118,8 @@ def init_session_state():
         st.session_state.legal_team = None
     if 'knowledge_base' not in st.session_state:
         st.session_state.knowledge_base = None
+    if 'selected_model' not in st.session_state:
+        st.session_state.selected_model = "o1-mini"
 
 def main():
     st.set_page_config(page_title="Legal Document Analyzer", layout="wide")
@@ -133,6 +138,15 @@ def main():
         )
         if openai_key:
             st.session_state.openai_api_key = openai_key
+
+        anthropic_key = st.text_input(
+            "Anthropic API Key",
+            type="password",
+            value=st.session_state.anthropic_api_key if st.session_state.anthropic_api_key else "",
+            help="Enter your Anthropic API key (required for Claude models)"
+        )
+        if anthropic_key:
+            st.session_state.anthropic_api_key = anthropic_key
 
         qdrant_key = st.text_input(
             "Qdrant API Key",
@@ -160,6 +174,22 @@ def main():
                 st.error(f"Failed to connect to Qdrant: {str(e)}")
 
         st.divider()
+        
+        # Add model selection
+        st.header("🤖 Model Configuration")
+        model_option = st.selectbox(
+            "Select Language Model",
+            options=["o1-mini", "gpt-4o", "claude-3-5-sonnet"],
+            index=0 if st.session_state.selected_model == "o1-mini" else 1 if st.session_state.selected_model == "gpt-4o" else 2,
+            help="Choose the language model to use for analysis"
+        )
+        if model_option != st.session_state.selected_model:
+            st.session_state.selected_model = model_option
+            if st.session_state.legal_team:
+                st.session_state.legal_team = None
+                st.info("Model changed. Please re-upload your document to initialize the team with the new model.")
+
+        st.divider()
 
         if all([st.session_state.openai_api_key, st.session_state.vector_db]):
             st.header("📄 Document Upload")
@@ -174,11 +204,28 @@ def main():
                         knowledge_base = process_document(uploaded_file, st.session_state.vector_db)
                         st.session_state.knowledge_base = knowledge_base
                         
+                        # Validate API keys based on selected model
+                        if st.session_state.selected_model == "claude-3-5-sonnet" and not st.session_state.anthropic_api_key:
+                            st.error("Anthropic API key is required to use Claude models")
+                            return
+                        elif st.session_state.selected_model in ["o1-mini", "gpt-4o"] and not st.session_state.openai_api_key:
+                            st.error("OpenAI API key is required to use OpenAI models")
+                            return
+
+                        # Configure model based on selection
+                        if st.session_state.selected_model == "claude-3-5-sonnet":
+                            model = Claude(
+                                model="claude-3-5-sonnet-20240620",
+                                api_key=st.session_state.anthropic_api_key
+                            )
+                        else:
+                            model = OpenAIChat(model=st.session_state.selected_model)
+                        
                         # Initialize agents
                         legal_researcher = Agent(
                             name="Legal Researcher",
                             role="Legal Research Specialist",
-                            model=OpenAIChat(model="o1-mini"),
+                            model=model,
                             tools=[DuckDuckGo()],
                             knowledge=st.session_state.knowledge_base,
                             search_knowledge=True,
@@ -196,7 +243,7 @@ def main():
                         contract_analyst = Agent(
                             name="Contract Analyst",
                             role="Contract Analysis Specialist",
-                            model=OpenAIChat(model="o1-mini"),
+                            model=model,
                             knowledge=knowledge_base,
                             search_knowledge=True,
                             instructions=[
@@ -210,7 +257,7 @@ def main():
                         legal_strategist = Agent(
                             name="Legal Strategist", 
                             role="Legal Strategy Specialist",
-                            model=OpenAIChat(model="o1-mini"),
+                            model=model,
                             knowledge=knowledge_base,
                             search_knowledge=True,
                             instructions=[
@@ -225,7 +272,7 @@ def main():
                         st.session_state.legal_team = Agent(
                             name="Legal Team Lead",
                             role="Legal Team Coordinator",
-                            model=OpenAIChat(model="o1-mini"),
+                            model=model,
                             team=[legal_researcher, contract_analyst, legal_strategist],
                             knowledge=st.session_state.knowledge_base,
                             search_knowledge=True,
