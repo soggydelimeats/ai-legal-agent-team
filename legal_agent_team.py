@@ -132,12 +132,12 @@ def init_session_state():
     if 'password_entered' not in st.session_state:
         st.session_state.password_entered = False
 
-try:
-    from config import get_api_keys
-    API_KEYS = get_api_keys()
-except (ImportError, ValueError) as e:
-    API_KEYS = {'openai': None, 'anthropic': None, 'qdrant': None}
-    print(f"Error loading API keys: {str(e)}")
+# Get API keys from environment/secrets
+API_KEYS = {
+    'openai': os.environ.get('OPENAI_KEY', ''),
+    'anthropic': os.environ.get('ANTHROPIC_KEY', ''),
+    'qdrant': os.environ.get('QDRANT_KEY', '')
+}
 
 def validate_api_key(key: str, key_type: str) -> bool:
     """Validate API key format"""
