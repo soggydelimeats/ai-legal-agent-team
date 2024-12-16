@@ -134,9 +134,9 @@ def init_session_state():
 
 # Get API keys from environment/secrets
 API_KEYS = {
-    'openai': os.environ.get('OPENAI_KEY', ''),
-    'anthropic': os.environ.get('ANTHROPIC_KEY', ''),
-    'qdrant': os.environ.get('QDRANT_KEY', '')
+    'openai': os.environ.get('OPENAI_KEY'),
+    'anthropic': os.environ.get('ANTHROPIC_KEY'),
+    'qdrant': os.environ.get('QDRANT_KEY')
 }
 
 def validate_api_key(key: str, key_type: str) -> bool:
